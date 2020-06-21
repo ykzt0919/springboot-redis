@@ -23,6 +23,10 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 public class RedisConfig {
    private Logger logger= LoggerFactory.getLogger(getClass());
 
+    /**
+     * 创建了redis的一个客户端
+     * @return
+     */
    @Bean
     public RedissonClient redissonClient(){
        RedissonClient redissonClient=null;
