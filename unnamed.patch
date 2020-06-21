@@ -1,0 +1,784 @@
+Index: pom.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- pom.xml	(date 1591229003993)
++++ pom.xml	(date 1591229003993)
+@@ -0,0 +1,65 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
++    <modelVersion>4.0.0</modelVersion>
++    <parent>
++        <groupId>org.springframework.boot</groupId>
++        <artifactId>spring-boot-starter-parent</artifactId>
++        <version>2.1.13.RELEASE</version>
++        <relativePath/> <!-- lookup parent from repository -->
++    </parent>
++    <groupId>com.qf.redis</groupId>
++    <artifactId>springboot-redis</artifactId>
++    <version>0.0.1-SNAPSHOT</version>
++    <name>springboot-redis</name>
++    <description>Demo project for Spring Boot</description>
++
++    <properties>
++        <java.version>1.8</java.version>
++    </properties>
++
++    <dependencies>
++        <dependency>
++            <groupId>org.springframework.boot</groupId>
++            <artifactId>spring-boot-starter-web</artifactId>
++        </dependency>
++
++        <dependency>
++            <groupId>org.projectlombok</groupId>
++            <artifactId>lombok</artifactId>
++            <optional>true</optional>
++        </dependency>
++        <dependency>
++            <groupId>org.springframework.boot</groupId>
++            <artifactId>spring-boot-starter-test</artifactId>
++            <scope>test</scope>
++        </dependency>
++        <!--json包-->
++        <dependency>
++            <groupId>com.alibaba</groupId>
++            <artifactId>fastjson</artifactId>
++            <version>1.2.54</version>
++        </dependency>
++        <!--下面就是Redis的包-->
++        <dependency>
++            <groupId>org.springframework.boot</groupId>
++            <artifactId>spring-boot-starter-data-redis</artifactId>
++        </dependency>
++        <!--redsson包-->
++        <dependency>
++            <groupId>org.redisson</groupId>
++            <artifactId>redisson</artifactId>
++            <version>3.11.0</version>
++        </dependency>
++    </dependencies>
++
++    <build>
++        <plugins>
++            <plugin>
++                <groupId>org.springframework.boot</groupId>
++                <artifactId>spring-boot-maven-plugin</artifactId>
++            </plugin>
++        </plugins>
++    </build>
++
++</project>
+Index: src/main/java/com/qf/redis/pojo/User.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/com/qf/redis/pojo/User.java	(date 1583739422722)
++++ src/main/java/com/qf/redis/pojo/User.java	(date 1583739422722)
+@@ -0,0 +1,21 @@
++package com.qf.redis.pojo;
++
++import lombok.AllArgsConstructor;
++import lombok.Data;
++import lombok.NoArgsConstructor;
++
++import java.io.Serializable;
++
++/**
++ * @author YK
++ * @version 1.0
++ * @date 2020/3/9
++ */
++@Data
++@AllArgsConstructor
++@NoArgsConstructor
++public class User implements Serializable {
++    private static final long serialVersionUID = -3309671332948536494L;
++    private String username;
++    private String password;
++}
+Index: src/main/java/com/qf/redis/service/impl/RedisServiceImpl.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/com/qf/redis/service/impl/RedisServiceImpl.java	(date 1583759181355)
++++ src/main/java/com/qf/redis/service/impl/RedisServiceImpl.java	(date 1583759181355)
+@@ -0,0 +1,27 @@
++package com.qf.redis.service.impl;
++
++import com.qf.redis.manager.RedisManager;
++import com.qf.redis.service.IRedisService;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.stereotype.Service;
++
++/**
++ * @author YK
++ * @version 1.0
++ * @date 2020/3/9
++ */
++@Service
++public class RedisServiceImpl implements IRedisService {
++
++    @Autowired
++    private RedisManager redisManager;
++    @Override
++    public void add(String key, String value) {
++        redisManager.addKeyAndValue(key,value);
++    }
++
++    @Override
++    public String getValueForKey(String key) {
++        return redisManager.getValueForKey(key);
++    }
++}
+Index: src/main/java/com/qf/redis/lock/DistributeRedisLock.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/com/qf/redis/lock/DistributeRedisLock.java	(date 1587830602963)
++++ src/main/java/com/qf/redis/lock/DistributeRedisLock.java	(date 1587830602963)
+@@ -0,0 +1,76 @@
++package com.qf.redis.lock;
++
++import org.redisson.api.RLock;
++import org.redisson.api.RedissonClient;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.stereotype.Component;
++
++import java.util.concurrent.TimeUnit;
++
++/**
++ * @author YK
++ * @version 1.0
++ * @date 2020/3/9
++ * 用来加锁和解锁的
++ */
++@Component//注入ioc容器中
++public class DistributeRedisLock {
++
++    private Logger logger= LoggerFactory.getLogger(getClass());
++
++    @Autowired
++    private RedissonClient redissonClient;
++
++
++    //一个方法用来加锁
++
++    /**
++     * 加锁成功....
++     * @param lockName
++     * @return
++     */
++    public boolean lock(String lockName){
++        try {
++            if(null==redissonClient){  //如果对象没有注入进来那么说明是有问题的
++                logger.info("注入redissonClient对象失败....");
++                return false;
++            }
++            //获取这个锁
++            RLock lock = redissonClient.getLock(lockName);
++            //锁住了
++            lock.lock(30, TimeUnit.SECONDS);
++            logger.info("加锁成功.......");
++            return true;
++        } catch (Exception e) {
++            logger.info("不可预期的异常造成了加锁失败....");
++            return false;
++        }
++    }
++
++
++    /**
++     * 释放锁
++     * @param lockName
++     * @return
++     */
++    public boolean unlock(String lockName){
++        try {
++            if(null==redissonClient){  //说明没法释放出问题了....
++                logger.info("释放锁失败----"+lockName);
++            }
++            //获取到这个锁对象
++            RLock lock = redissonClient.getLock(lockName);
++            if(null!=lock){
++                lock.unlock();
++                logger.info("释放锁成功....");
++                return true;
++            }
++            return false;
++        } catch (Exception e) {
++            logger.info("释放锁失败了....");
++            return false;
++        }
++    }
++}
+Index: src/main/java/com/qf/redis/service/IRedisService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/com/qf/redis/service/IRedisService.java	(date 1583739614276)
++++ src/main/java/com/qf/redis/service/IRedisService.java	(date 1583739614276)
+@@ -0,0 +1,23 @@
++package com.qf.redis.service;
++
++/**
++ * @author YK
++ * @version 1.0
++ * @date 2020/3/9
++ */
++public interface IRedisService {
++    /**
++     * 添加数据到Redis中
++     * @param key
++     * @param value
++     */
++    void add(String key,String value);
++
++    /**
++     * 通过key获取值
++     * @param key
++     * @return
++     */
++    String getValueForKey(String key);
++
++}
+Index: src/main/java/com/qf/redis/manager/RedisManager.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/com/qf/redis/manager/RedisManager.java	(date 1587901871139)
++++ src/main/java/com/qf/redis/manager/RedisManager.java	(date 1587901871139)
+@@ -0,0 +1,81 @@
++package com.qf.redis.manager;
++
++import com.qf.redis.pojo.User;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.data.redis.core.RedisTemplate;
++import org.springframework.data.redis.core.StringRedisTemplate;
++import org.springframework.stereotype.Component;
++
++import java.util.Map;
++import java.util.concurrent.TimeUnit;
++
++/**
++ * @author YK
++ * @version 1.0
++ * @date 2020/3/9
++ * 这里做的是业务下沉  主要是写所有访问redis库
++ */
++@Component //将这个类放入IOC容器
++public class RedisManager {
++    @Autowired
++    private StringRedisTemplate stringRedisTemplate;
++    @Autowired
++    private RedisTemplate redisTemplate;
++
++    /**
++     * 向redis存放键对
++     * @param key
++     * @param value
++     */
++    public void addKeyAndValue(String key,String value){
++        /**
++         * stringRedisTemplate.opsForValue(); 这个就是用来操作 String类型的
++         * stringRedisTemplate.opsForList(); 这个主要就用来操作list的
++         * stringRedisTemplate.opsForZSet(); 这个主要用来操作sorted set
++         * stringRedisTemplate.opsForHash(); 用来操作hash结构的
++         * stringRedisTemplate.opsForSet();  这个就是用来操作Set数据类型的
++         */
++        redisTemplate.opsForValue().set("user", new User("ykk","123"));
++       // stringRedisTemplate.opsForValue().set(key,value);
++    }
++
++    /**
++     * 通过key在redis中取值
++     * @param key
++     * @return
++     */
++    public String getValueForKey(String key){
++
++//        stringRedisTemplate.expire("nz1904",60, TimeUnit.SECONDS);
++//        stringRedisTemplate.delete("nz1904");
++//        stringRedisTemplate.hasKey("nz1904");
++//        stringRedisTemplate.getExpire("nz1904");
++//        stringRedisTemplate.opsForValue().increment("nz1904",-100);
++//        stringRedisTemplate.opsForHash().entries("一个或多个key");
++//        stringRedisTemplate.opsForHash().put("集合的名字","key值","value值");
++       return stringRedisTemplate.opsForValue().get(key);
++    }
++    /**
++     * 常用的api
++     * //相当于expire  key 过期时间
++     * stringRedisTemplate.expire("nz1904",60, TimeUnit.SECONDS);
++     * //相当于del key删除某个键
++     * stringRedisTemplate.delete("nz1904");
++     * //相当于 exists key判断某个键是否存在
++     * stringRedisTemplate.hasKey("nz1904");
++     * //相当于ttl key获取当前键的过期时间
++     * stringRedisTemplate.getExpire("nz1904");
++     * //相当于incrby key 增长的长度
++     *stringRedisTemplate.opsForValue().increment("nz1904",100);
++     *  //相当于decrby key 减少的长度
++     *stringRedisTemplate.opsForValue().increment("nz1904",-100);
++     *   //相当于hmget
++     *   stringRedisTemplate.opsForHash().entries("一个或多个key");
++     *   //相当于hmset
++     *  stringRedisTemplate.opsForHash().putAll("key", );
++     *  //相当于hset 集合的决名字 键 值
++     *stringRedisTemplate.opsForHash().put("集合的名字","key值","value值");
++     *
++     *
++     */
++}
+Index: src/main/java/com/qf/redis/config/RedisConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/com/qf/redis/config/RedisConfig.java	(date 1588088216952)
++++ src/main/java/com/qf/redis/config/RedisConfig.java	(date 1588088216952)
+@@ -0,0 +1,71 @@
++package com.qf.redis.config;
++
++import com.qf.redis.pojo.User;
++import com.qf.redis.serializable.YkkSerializable;
++import org.redisson.Redisson;
++import org.redisson.api.RedissonClient;
++import org.redisson.config.Config;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.boot.SpringBootConfiguration;
++import org.springframework.context.annotation.Bean;
++import org.springframework.data.redis.connection.RedisConnectionFactory;
++import org.springframework.data.redis.core.RedisTemplate;
++import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
++import org.springframework.data.redis.serializer.StringRedisSerializer;
++
++/**
++ * @author YK
++ * @version 1.0
++ * @date 2020/4/25
++ */
++@SpringBootConfiguration
++public class RedisConfig {
++   private Logger logger= LoggerFactory.getLogger(getClass());
++
++   @Bean
++    public RedissonClient redissonClient(){
++       RedissonClient redissonClient=null;
++       //获取config的实例
++       Config config = new Config();
++       //设置请求的URL地址
++       String url="redis://116.62.179.170:6379";
++       //设置config
++       config.useSingleServer().setAddress(url);
++       //将redis的密码设置到config中
++       config.useSingleServer().setPassword("ykzt");
++       //通过Redisson来创建一个客户端对象
++       try{
++           redissonClient= Redisson.create(config);
++           logger.info("创建RedissonClient成功");
++           return redissonClient;
++       }catch (Exception err){
++           logger.info("创建RedissonClient失败:"+err.fillInStackTrace());
++           return null;
++       }
++   }
++
++
++   @Bean
++    public RedisTemplate redisTemplate(RedisConnectionFactory redisConnectionFactory){
++
++       RedisTemplate<Object,Object> redisTemplate=new RedisTemplate<>();
++
++       //设置连接工厂
++       redisTemplate.setConnectionFactory(redisConnectionFactory);
++
++       //设置序列化器  这是key
++       redisTemplate.setKeySerializer(new StringRedisSerializer());
++
++       //设置值的序列化器
++       //redisTemplate.setValueSerializer(new YkkSerializable(Object.class));
++
++       //设置redis自带的json格式值的序列化器  底层跟我们自定义序列化器的原理一样
++       redisTemplate.setValueSerializer(new Jackson2JsonRedisSerializer<Object>(Object.class));
++
++
++       return redisTemplate;
++
++
++   }
++}
+Index: src/main/resources/application.properties
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>NATIVE_TO_ASCII_UTF-8
+===================================================================
+--- src/main/resources/application.properties	(date 1587735410537)
++++ src/main/resources/application.properties	(date 1587735410537)
+@@ -0,0 +1,15 @@
++#配置redis
++spring.redis.host=116.62.179.170
++#设置端口
++spring.redis.port=6379
++#设置redis密码
++spring.redis.password=ykzt
++#设置最大连接数
++spring.redis.jedis.pool.max-active=10
++
++#设置线程池中最大空闲连接
++spring.redis.jedis.pool.max-idle=10
++spring.redis.jedis.pool.min-idle=0
++
++#设置最大最大阻塞时间 -1表示没有限制
++spring.redis.jedis.pool.max-wait=-1ms
+Index: src/main/java/com/qf/redis/config/AppConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/com/qf/redis/config/AppConfig.java	(date 1583476808894)
++++ src/main/java/com/qf/redis/config/AppConfig.java	(date 1583476808894)
+@@ -0,0 +1,14 @@
++package com.qf.redis.config;
++
++import org.springframework.boot.SpringBootConfiguration;
++import org.springframework.context.annotation.ComponentScan;
++
++/**
++ * @author YK
++ * @version 1.0
++ * @date 2020/3/6
++ */
++@SpringBootConfiguration
++@ComponentScan(basePackages = "com.qf.redis")
++public class AppConfig {
++}
+Index: src/main/java/com/qf/redis/service/impl/TrainTickService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/com/qf/redis/service/impl/TrainTickService.java	(date 1587830252786)
++++ src/main/java/com/qf/redis/service/impl/TrainTickService.java	(date 1587830252786)
+@@ -0,0 +1,147 @@
++package com.qf.redis.service.impl;
++
++import com.qf.redis.lock.DistributeRedisLock;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.data.redis.core.StringRedisTemplate;
++import org.springframework.stereotype.Service;
++
++import java.util.UUID;
++import java.util.concurrent.TimeUnit;
++
++/**
++ * @author YK
++ * @version 1.0
++ * @date 2020/3/9
++ * 买火车票
++ */
++@Service
++public class TrainTickService {
++    private Logger logger= LoggerFactory.getLogger(getClass());
++
++    @Autowired
++    private StringRedisTemplate stringRedisTemplate;
++
++    @Autowired
++    private DistributeRedisLock distributeRedisLock;
++
++    /**
++     * 卖火车票
++     * 将所有的票放到redis缓存中
++     * 场景卖火车票的系统 假设1000个人抢100张票
++     *
++     */
++    public  String produceStock(){
++        //设置分布式锁
++        String lock="lock";
++        String value= UUID.randomUUID().toString();
++        try {
++//            //setnx命令
++//            Boolean tag = stringRedisTemplate.opsForValue().setIfAbsent(lock, "");
++//            //给可以设置过期时间
++//            //执行这句话是突然死机了 就会出现死锁
++//            stringRedisTemplate.expire(lock,60, TimeUnit.SECONDS);
++            //在高版本的redis中是可以将以上setnx和exprie一起设置保证一致性
++            //底层是redis和lula脚本 在c的层面上实现原子性的
++            Boolean tag = stringRedisTemplate.opsForValue().setIfAbsent(lock, value, 30, TimeUnit.SECONDS);
++            if (!tag){
++                return "当前排队人数过多请等待";
++            }
++
++            /**
++             *场景第一个人的程序还没有执行完锁已经过期   第二人进来创建了锁  第一个人执行完了将第二个锁删除了
++             *
++             * 解决比较key中的value值相同才删除 不同就等待锁过期
++             *
++             * 预防锁过期程序还没执行完   开启一个守护线程  每隔锁过期时间的1/3的时间给锁续命
++             *
++             */
++            //开启守护线程保证锁能完全锁住票  保证程序的正常执行
++            //传入锁
++            myThred myThred = new myThred(lock);
++            myThred.setDaemon(true);//设置成后台线程
++            myThred.start();//运行  与整个方法同生死
++            //在redis中获取票的剩余量
++            int stock =  Integer.parseInt(stringRedisTemplate.opsForValue().get("traintickes"));
++            //判断剩余票量是否能继续卖
++            if (stock>0){//说明可以减去库存
++                int rStock=stock-1;
++                //将真实的库存放入带redis中
++                stringRedisTemplate.opsForValue().set("traintickes",String.valueOf(rStock));
++                logger.info("购票成功");
++            }else {
++                logger.info("购票失败库存不足");
++            }
++        }finally {//执行完毕之后将锁删除
++            if (value.equals(stringRedisTemplate.opsForValue().get(lock))) {//将设置的值与获取的值做对比相同删除锁
++                //不同就等待锁过期
++                stringRedisTemplate.delete(lock);
++            }
++        }
++
++        return "抢票成功";
++    }
++
++
++    /**
++     * 使用后台线程进行续命
++     * 守护线程
++     *   在主程序下 开启一个守护线程  守护线程的生命周期与主线程同生死
++     */
++    class myThred extends Thread{
++        //利用构造方法将锁传入
++        String lock;
++        public myThred(String lock){
++            this.lock=lock;
++        }
++
++        @Override
++        public void run() {
++            //需要重复执行  守护线程的生命周期不受自己控制
++            while (true){
++                try {
++                    Thread.sleep(10000);
++                } catch (InterruptedException e) {
++                    e.printStackTrace();
++                }
++                //假设主程序还活着说明要继续续命
++                stringRedisTemplate.expire(lock,30,TimeUnit.SECONDS);
++            }
++
++        }
++    }
++
++
++    /**
++     * 使用redisson来完成
++     * @return
++     */
++    public String produceStockRedisson(){
++        String lock="lock";
++        try {
++            boolean lock1 = distributeRedisLock.lock(lock);
++            System.out.println(lock1);
++            if(true==lock1){//说明加锁成功
++                int stock = Integer.parseInt(stringRedisTemplate.opsForValue().get("traintickes"));
++                //首先要判断下 这个库存是否>0
++                if (stock > 0) {  //说明可以减去库存
++                    int rStock = stock - 1;
++                    //下一步：将真实的库存放到咋们的Redis中去
++                    stringRedisTemplate.opsForValue().set("traintickes", String.valueOf(rStock));
++                    logger.info("扣减库存成功....剩余库存:" + rStock);
++
++                } else {   //说明不能扣减库存
++                    logger.info("库存扣减失败、库存是负数、不足...");
++                }  //已经用了15秒钟
++            }else{
++                return "当前的排队人数过多...";
++            }
++        }finally {
++            distributeRedisLock.unlock(lock);
++        }
++        return "抢票成功....";
++
++    }
++
++}
+Index: src/test/java/com/qf/redis/springbootredis/SpringbootRedisApplicationTests.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/test/java/com/qf/redis/springbootredis/SpringbootRedisApplicationTests.java	(date 1583476624603)
++++ src/test/java/com/qf/redis/springbootredis/SpringbootRedisApplicationTests.java	(date 1583476624603)
+@@ -0,0 +1,13 @@
++package com.qf.redis.springbootredis;
++
++import org.junit.Test;
++import org.springframework.boot.test.context.SpringBootTest;
++
++@SpringBootTest
++class SpringbootRedisApplicationTests {
++
++    @Test
++    void contextLoads() {
++    }
++
++}
+Index: src/main/java/com/qf/redis/controller/RedisController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/com/qf/redis/controller/RedisController.java	(date 1587901580053)
++++ src/main/java/com/qf/redis/controller/RedisController.java	(date 1587901580053)
+@@ -0,0 +1,43 @@
++package com.qf.redis.controller;
++
++import com.qf.redis.service.IRedisService;
++import com.qf.redis.service.impl.TrainTickService;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.web.bind.annotation.RequestMapping;
++import org.springframework.web.bind.annotation.RestController;
++
++/**
++ * @author YK
++ * @version 1.0
++ * @date 2020/3/6
++ */
++@RestController
++public class RedisController {
++    @Autowired
++    private IRedisService redisService;
++
++    @Autowired
++    private TrainTickService trainTickService;
++
++    @RequestMapping("/addValue")
++    public Object add(){
++        redisService.add("ykk","来了，老弟");
++        return "执行完成。。。。";
++    }
++
++
++    @RequestMapping(value = "/getValue")
++    public String getValue(String key){
++        return redisService.getValueForKey(key);
++    }
++
++
++    /**
++     * 减库存
++     * @return
++     */
++    @RequestMapping("produceStockRedisson")
++    public String produceStockRedisson(){
++        return trainTickService.produceStockRedisson();
++    }
++}
+Index: src/main/java/com/qf/redis/serializable/YkkSerializable.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/com/qf/redis/serializable/YkkSerializable.java	(date 1587898250325)
++++ src/main/java/com/qf/redis/serializable/YkkSerializable.java	(date 1587898250325)
+@@ -0,0 +1,60 @@
++package com.qf.redis.serializable;
++
++import com.alibaba.fastjson.JSON;
++import com.alibaba.fastjson.JSONObject;
++import org.springframework.data.redis.serializer.RedisSerializer;
++import org.springframework.data.redis.serializer.SerializationException;
++import org.springframework.stereotype.Component;
++
++import java.nio.charset.Charset;
++
++/**
++ * @author YK
++ * @version 1.0
++ * @date 2020/4/26
++ * 自定义序列化器
++ * 就是定义  放入redis数据库中的key和value以什么形式存放
++ */
++
++public class YkkSerializable implements RedisSerializer {
++    //利用构造器将类对象传入自定义序列化器中
++    private Class clazz;
++    public YkkSerializable(Class clazz){
++        this.clazz=clazz;
++    }
++
++    /**
++     * 序列化
++     * 就是将对象转换成字符串的方法
++     * @param o
++     * @return
++     * @throws SerializationException
++     */
++    @Override
++    public byte[] serialize(Object o) throws SerializationException {
++        if(o==null){//如果接收到的对象为空直接返回null不作处理
++            return null;
++        }
++        //将接收到的对象转换为json对象
++        String jsonString= JSON.toJSONString(o);
++        return jsonString.getBytes(Charset.forName("utf-8"));//返回json对象并设置成utf-8编码
++
++    }
++
++    /**
++     * 反序列化将redis数据库中的字符串数据转换成java对象
++     * @param bytes
++     * @return
++     * @throws SerializationException
++     */
++    @Override
++    public Object deserialize(byte[] bytes) throws SerializationException {
++        if(bytes==null){
++            return null;
++        }
++        //将string类型的json转换成java对象
++        String Result=new String(bytes);
++        return JSON.parseObject(Result,clazz);
++
++    }
++}
+Index: src/main/java/com/qf/redis/RedisApplication.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- src/main/java/com/qf/redis/RedisApplication.java	(date 1583476808850)
++++ src/main/java/com/qf/redis/RedisApplication.java	(date 1583476808850)
+@@ -0,0 +1,16 @@
++package com.qf.redis;
++
++import org.springframework.boot.SpringApplication;
++import org.springframework.boot.autoconfigure.SpringBootApplication;
++
++/**
++ * @author YK
++ * @version 1.0
++ * @date 2020/3/6
++ */
++@SpringBootApplication
++public class RedisApplication {
++    public static void main(String[] args) {
++        SpringApplication.run(RedisApplication.class,args);
++    }
++}
